@@ -1,0 +1,41 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/pnpm-lock.yaml
+
+# next.js
+/.next/
+/out/
+/prisma/migrations/
+# production
+/build
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Claude Code worktrees and session data
+.claude/
+
+# Rust TEE contract build artifacts
+contracts/tee/*/target/
+
+# docs local (ignored at root only — tracked if in /docs/)
+/T3-IMPLEMENTATION-PLAN.md
+/Terminal3.md
+
+# ESLint config (auto-generated)
+.eslintrc.json
