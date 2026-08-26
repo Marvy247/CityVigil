@@ -256,6 +256,10 @@ author's machine is not evidence.
 
 ## Measured API facts
 
+Full detail, including five undocumented behaviours we measured, is in
+**[API_USAGE.md](API_USAGE.md)** — the submission's "documentation of FortyGuard
+API usage".
+
 Established by direct measurement, not assumption:
 
 - **Heatmap cost is flat at 4,220 credits per call**, independent of area. An
