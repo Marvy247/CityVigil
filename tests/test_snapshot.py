@@ -99,3 +99,26 @@ def test_audit_snapshot_records_layer_choices():
     payload = json.loads((SNAPSHOT / "api_audit.json").read_text(encoding="utf-8"))
     assert payload["records"], "the audit capture is empty"
     assert payload["layers_used"], "no layer choices were recorded"
+
+
+def test_registry_keeps_both_study_windows():
+    """The 2024 window is retained on purpose: persistence is saturated in 2026.
+
+    Dropping it would remove the only window where the total-hours versus
+    unbroken-hours distinction can actually be demonstrated.
+    """
+    from cityvigil.cities import CITIES, PHOENIX, PHOENIX_2024
+
+    assert PHOENIX.episode_start.startswith("2026"), "primary episode should be current-season"
+    assert PHOENIX_2024.episode_start.startswith("2024")
+    assert set(CITIES) == {"phoenix", "phoenix-2024"}
+    # Same footprint, so the two windows are directly comparable.
+    assert PHOENIX.aoi == PHOENIX_2024.aoi
+
+
+def test_episode_notes_disclose_their_own_limits():
+    """Each window must state what it does and does not support."""
+    from cityvigil.cities import PHOENIX, PHOENIX_2024
+
+    assert "saturated" in PHOENIX.episode_note
+    assert "counterfactual" in PHOENIX_2024.episode_note
