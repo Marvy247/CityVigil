@@ -81,10 +81,19 @@ app = FastAPI(
     description="Heat exposure surfaces from the FortyGuard Temperature API, with a full audit trail.",
 )
 
-# The dashboard runs on :3000 in development.
+# Origins allowed to call this API. The dashboard runs on :3000 in development;
+# add a deployed origin via CITYVIGIL_ALLOWED_ORIGINS (comma-separated) rather than
+# widening this to "*", which would let any site drive an instance holding a key.
+_default_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_extra_origins = [
+    o.strip()
+    for o in (os.getenv("CITYVIGIL_ALLOWED_ORIGINS") or "").split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_default_origins + _extra_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
