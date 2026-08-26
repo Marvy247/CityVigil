@@ -22,7 +22,7 @@ from cityvigil import FortyGuardClient, Settings  # noqa: E402
 from cityvigil.layers import ExposureLayers  # noqa: E402
 
 # ~1.1 km² over downtown Phoenix, comfortably inside the Basic-tier area cap.
-PHOENIX_DOWNTOWN = {
+_UNUSED_SMALL_AOI = {
     "type": "FeatureCollection",
     "features": [
         {
@@ -44,13 +44,16 @@ PHOENIX_DOWNTOWN = {
     ],
 }
 
-# A real Phoenix heat episode, safely inside the 2021-present archive.
-STUDY_DAY = "2024-07-15"
-WINDOW_START, WINDOW_END = "2024-07-15", "2024-07-21"
+# Study window comes from the city registry, so there is one source of truth for
+# the episode rather than a copy that can drift out of date.
+from cityvigil.cities import PHOENIX  # noqa: E402
+
+STUDY_DAY = PHOENIX.episode_start
+WINDOW_START, WINDOW_END = PHOENIX.episode_start, PHOENIX.episode_end
 
 # 100 F. Passed in Fahrenheit deliberately, to exercise the conversion that the
 # API requires (it takes Celsius) rather than hard-coding a Celsius constant.
-DANGER_THRESHOLD_F = 100.0
+DANGER_THRESHOLD_F = PHOENIX.danger_threshold_f
 
 
 def main() -> int:
@@ -67,17 +70,17 @@ def main() -> int:
 
     print("[1/4] how hot is it?            -> tcm")
     surfaces["snapshot"] = layers.how_hot(
-        PHOENIX_DOWNTOWN, start_date=STUDY_DAY, filter_type=3, granularity=100
+        PHOENIX.aoi, start_date=STUDY_DAY, filter_type=3, granularity=100
     )
 
     print("[2/4] when does it peak?        -> time_of_measure")
     surfaces["peak_hour"] = layers.when_peak(
-        PHOENIX_DOWNTOWN, start_date=STUDY_DAY, filter_type=3, granularity=100
+        PHOENIX.aoi, start_date=STUDY_DAY, filter_type=3, granularity=100
     )
 
     print("[3/4] how long is it dangerous? -> exceedance")
     surfaces["exceedance"] = layers.how_long_dangerous(
-        PHOENIX_DOWNTOWN,
+        PHOENIX.aoi,
         threshold=DANGER_THRESHOLD_F,
         threshold_unit="F",
         start_date=WINDOW_START,
@@ -87,7 +90,7 @@ def main() -> int:
 
     print("[4/4] is there any relief?      -> persistence")
     surfaces["persistence"] = layers.any_relief(
-        PHOENIX_DOWNTOWN,
+        PHOENIX.aoi,
         threshold=DANGER_THRESHOLD_F,
         threshold_unit="F",
         start_date=WINDOW_START,
