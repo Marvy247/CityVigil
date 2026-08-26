@@ -1,0 +1,23 @@
+.env
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+outputs/
+*.egg-info/
+
+# Frontend build artefacts
+dashboard/node_modules/
+dashboard/.next/
+dashboard/tsconfig.tsbuildinfo
+.DS_Store
+
+# The dashboard began as a separate template repo. Its original .git directory is
+# moved aside rather than deleted so nothing is lost; it must not be committed.
+dashboard/.git-template-backup/
+
+# Cached API responses ARE committed (gzipped, ~2.7 MB) so the project replays
+# offline with no key. Anything genuinely large or private goes here instead:
+data/scratch/
