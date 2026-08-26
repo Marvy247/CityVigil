@@ -30,6 +30,7 @@ from .errors import CacheMiss, CityVigilError, ValidationError
 from .exposure import ExposureReport, assign_tiles, build_exposure_report
 from .fg_client import FortyGuardClient
 from .layers import TIME_OF_MEASURE_NOTE, ExposureLayers, HeatSurface
+from .simulate import greedy_site_placement, simulate_extended_hours
 from .sources import SOURCES, citations, load_manifest
 from .supply import (
     CoolingSite,
@@ -144,6 +145,38 @@ class CoverageRequest(BaseModel):
         default=0.8, gt=0, le=10, description="Straight-line radius treated as walkable"
     )
     limit: int = Field(default=15, ge=1, le=200)
+
+
+class SimulateHoursRequest(BaseModel):
+    """A what-if request for extending cooling-site opening hours."""
+
+    city: str = Field(default="phoenix")
+    granularity: int = Field(default=100)
+    weekday: str = Field(default="Wednesday")
+    hour: float = Field(default=19.0, description="Hour of day the result is evaluated at")
+    extra_hours: list[float] = Field(
+        default=[1.0, 2.0, 3.0, 4.0], description="Extensions to compare"
+    )
+    walkable_km: float = Field(default=0.8, gt=0, le=10)
+    uptake: float = Field(
+        default=1.0,
+        ge=0,
+        le=1,
+        description="Share of covered residents assumed to actually use a site. "
+        "1.0 gives a clearly-labelled upper bound.",
+    )
+
+
+class SimulateSitesRequest(BaseModel):
+    """A what-if request for placing additional pop-up cooling sites."""
+
+    city: str = Field(default="phoenix")
+    granularity: int = Field(default=100)
+    weekday: str = Field(default="Wednesday")
+    hour: float = Field(default=19.0)
+    budget: int = Field(default=5, ge=1, le=50, description="How many sites to place")
+    walkable_km: float = Field(default=0.8, gt=0, le=10)
+    uptake: float = Field(default=1.0, ge=0, le=1)
 
 
 # ------------------------------------------------------- tract data (lazy)
@@ -445,6 +478,99 @@ def coverage(req: CoverageRequest) -> dict[str, Any]:
             for e in report.ranked()
             if not at_evening[e.tract.geoid].walkable_cover
         ][: req.limit],
+    }
+
+
+@app.post("/api/simulate/hours")
+def simulate_hours(req: SimulateHoursRequest) -> dict[str, Any]:
+    """What if every cooling site closed later?
+
+    The prescriptive counterpart to ``/api/coverage``. Returns person-hours and
+    residents newly protected, plus the staffing cost proxy, so the trade is
+    visible rather than asserted.
+    """
+    try:
+        report = _exposure_report(ExposureRequest(city=req.city, granularity=req.granularity))
+        sites = get_sites()
+    except (TractDataError, SupplyDataError) as exc:
+        raise HTTPException(status_code=503, detail={"error": str(exc)}) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise _handle(exc) from exc
+
+    results = []
+    for extra in req.extra_hours:
+        try:
+            result = simulate_extended_hours(
+                report.tracts,
+                sites,
+                extra_hours=extra,
+                weekday=req.weekday,
+                hour=req.hour,
+                walkable_km=req.walkable_km,
+                uptake=req.uptake,
+            )
+        except ValidationError as exc:
+            raise _handle(exc) from exc
+        results.append(result.to_dict())
+
+    _audit.decision(
+        "simulated cooling-hours extensions",
+        hour=req.hour,
+        uptake=req.uptake,
+        options=[r["intervention"]["description"] for r in results],
+    )
+    return {"hour": req.hour, "uptake": req.uptake, "options": results}
+
+
+@app.post("/api/simulate/sites")
+def simulate_sites(req: SimulateSitesRequest) -> dict[str, Any]:
+    """Where should the next N pop-up cooling sites go?
+
+    Greedy marginal gain over the worst-served tracts. The ordering is the point:
+    it answers "if we can only afford three, which three?" rather than presenting
+    an all-or-nothing plan.
+    """
+    try:
+        report = _exposure_report(ExposureRequest(city=req.city, granularity=req.granularity))
+        sites = get_sites()
+    except (TractDataError, SupplyDataError) as exc:
+        raise HTTPException(status_code=503, detail={"error": str(exc)}) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise _handle(exc) from exc
+
+    try:
+        plan = greedy_site_placement(
+            report.tracts,
+            sites,
+            budget=req.budget,
+            weekday=req.weekday,
+            hour=req.hour,
+            walkable_km=req.walkable_km,
+            uptake=req.uptake,
+        )
+    except ValidationError as exc:
+        raise _handle(exc) from exc
+
+    _audit.decision(
+        "planned pop-up cooling sites by greedy marginal gain",
+        budget=req.budget,
+        hour=req.hour,
+        placed=len(plan),
+    )
+    return {
+        "hour": req.hour,
+        "uptake": req.uptake,
+        "budget": req.budget,
+        "placements": plan,
+        "method": (
+            "Greedy marginal gain. Coverage gain is submodular, so greedy carries a "
+            "known quality bound and produces a usable priority order."
+        ),
+        "caveats": [
+            "Proposed sites are hypothetical and labelled SIMULATED.",
+            "Placed at tract centres, not at real candidate buildings.",
+            "Straight-line coverage radius, so gains are optimistic.",
+        ],
     }
 
 
