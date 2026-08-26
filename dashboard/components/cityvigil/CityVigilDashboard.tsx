@@ -40,6 +40,7 @@ import {
   getSurfaces,
   getTractsSummary,
 } from '@/lib/cityvigil'
+import { AgentPanel } from './AgentPanel'
 import { PriorityPanel } from './PriorityPanel'
 
 const ALL_LAYERS: LayerKey[] = ['snapshot', 'peak_hour', 'exceedance', 'persistence']
@@ -239,6 +240,10 @@ export function CityVigilDashboard() {
           {city.episode.note}
         </p>
       )}
+
+      {/* Agent — placed above the map because the reasoning is the product for
+          the Agentic AI track, not an appendix to the visualisation. */}
+      {city && <AgentPanel city={city.key} hour={19} />}
 
       {/* Layer selection */}
       {layerMeta.length > 0 && (
