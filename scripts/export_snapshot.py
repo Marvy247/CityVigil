@@ -64,6 +64,10 @@ EXPORTS: list[tuple[str, callable]] = [
         "api_simulate_sites",
         lambda: api.simulate_sites(api.SimulateSitesRequest(city="phoenix", budget=5)),
     ),
+    # Exported last, deliberately: the audit trail accumulates as the calls above
+    # run, so capturing it at the end records the real layer choices and their
+    # rationales rather than an empty log.
+    ("api_audit", api.audit),
 ]
 
 #: Tile geometry per layer — the heavy ones, exported separately.
