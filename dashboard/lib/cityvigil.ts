@@ -9,9 +9,17 @@
  * Where the live API lives. When it is unreachable the client falls back to the
  * static snapshot under /snapshot, so a deployed site works with no backend and no
  * credentials. See scripts/export_snapshot.py.
+ *
+ * Set `NEXT_PUBLIC_CITYVIGIL_API=""` for a public deployment. Left at the localhost
+ * default, an HTTPS page would attempt an HTTP request to 127.0.0.1 — which the
+ * browser blocks as mixed content, producing console errors and a wasted round trip
+ * before the fallback engages. An empty value skips straight to the snapshot.
  */
 export const API_BASE =
   process.env.NEXT_PUBLIC_CITYVIGIL_API ?? 'http://127.0.0.1:8000'
+
+/** True when no live API is configured, so requests go straight to the snapshot. */
+const SNAPSHOT_ONLY = API_BASE.trim() === ''
 
 /** Set once the first request has had to fall back, so the UI can say so. */
 let usingSnapshot = false
@@ -177,6 +185,12 @@ async function fromSnapshot<T>(path: string): Promise<T> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // No API configured: this is a public deployment, so do not attempt a request
+  // that is guaranteed to fail and pollute the console.
+  if (SNAPSHOT_ONLY) {
+    return fromSnapshot<T>(path)
+  }
+
   let response: Response
   try {
     response = await fetch(`${API_BASE}${path}`, {
