@@ -17,6 +17,8 @@ committed responses with no key at all, which is how a judge runs the demo.
 
 from __future__ import annotations
 
+import os
+
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
