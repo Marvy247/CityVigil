@@ -5,8 +5,43 @@
  * FortyGuard key and has no authentication, so it must stay bound to localhost.
  */
 
+/**
+ * Where the live API lives. When it is unreachable the client falls back to the
+ * static snapshot under /snapshot, so a deployed site works with no backend and no
+ * credentials. See scripts/export_snapshot.py.
+ */
 export const API_BASE =
   process.env.NEXT_PUBLIC_CITYVIGIL_API ?? 'http://127.0.0.1:8000'
+
+/** Set once the first request has had to fall back, so the UI can say so. */
+let usingSnapshot = false
+
+/** True when responses are coming from the committed static capture. */
+export const isSnapshotMode = () => usingSnapshot
+
+type Listener = (snapshot: boolean) => void
+const listeners = new Set<Listener>()
+
+/** Subscribe to snapshot-mode changes, so a banner can appear when it engages. */
+export function onSourceChange(fn: Listener): () => void {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+function setSnapshotMode(on: boolean) {
+  if (usingSnapshot === on) return
+  usingSnapshot = on
+  listeners.forEach((fn) => fn(on))
+}
+
+/**
+ * Map an API path to its snapshot filename.
+ *
+ * `/api/surface/exceedance/geojson` -> `api_surface_exceedance_geojson`
+ */
+function snapshotName(path: string): string {
+  return path.replace(/^\//, '').replace(/\//g, '_').replace(/-/g, '_')
+}
 
 export type LayerKey = 'snapshot' | 'peak_hour' | 'exceedance' | 'persistence'
 
@@ -119,6 +154,28 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Load a response from the committed static snapshot.
+ *
+ * Deliberately not silent about what it cannot do: the snapshot is captured at
+ * default parameters, so a request with custom parameters gets the default answer.
+ * Callers surface that through the snapshot-mode banner rather than pretending the
+ * parameters were honoured.
+ */
+async function fromSnapshot<T>(path: string): Promise<T> {
+  const url = `/snapshot/${snapshotName(path)}.json`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new ApiError(
+      `No live API at ${API_BASE}, and no static snapshot for ${path}. ` +
+        `Start the API with: python3 scripts/serve.py`,
+      response.status,
+    )
+  }
+  setSnapshotMode(true)
+  return (await response.json()) as T
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
@@ -126,15 +183,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     })
-  } catch (cause) {
-    throw new ApiError(
-      `Cannot reach the CityVigil API at ${API_BASE}. Start it with: python3 scripts/serve.py`,
-      0,
-      cause,
-    )
+  } catch {
+    // The API is not running or not reachable from this origin. Fall back rather
+    // than failing, so a deployed demo still works.
+    return fromSnapshot<T>(path)
   }
 
   if (!response.ok) {
+    // A 5xx means the service is up but broken; the snapshot is still a better
+    // answer than an error page. A 4xx is a genuine client mistake, so surface it.
+    if (response.status >= 500) {
+      try {
+        return await fromSnapshot<T>(path)
+      } catch {
+        /* fall through to the error below */
+      }
+    }
     let detail: unknown
     try {
       detail = (await response.json())?.detail
@@ -148,6 +212,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(message, response.status, detail)
   }
 
+  setSnapshotMode(false)
   return (await response.json()) as T
 }
 
