@@ -1,5 +1,8 @@
 # CityVigil
 
+**Live demo: https://city-vigil.vercel.app** — runs from a committed snapshot of
+real FortyGuard responses, so it needs no API key and no backend.
+
 Protective intelligence for extreme heat. Decides who gets protected first when
 cooling resources are scarce, and reports both the human and the estimated
 economic consequence of each choice.

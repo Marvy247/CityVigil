@@ -34,10 +34,25 @@ cd dashboard
 npx vercel --prod
 ```
 
-Set **Root Directory** to `dashboard` in the project settings. No environment
-variables are required — leaving `NEXT_PUBLIC_CITYVIGIL_API` unset means the client
-tries localhost, fails immediately, and falls back to the snapshot, which is the
-desired behaviour for a public deployment.
+Set **Root Directory** to `dashboard` in the project settings, and set one
+environment variable:
+
+```
+NEXT_PUBLIC_CITYVIGIL_API=
+```
+
+Empty, deliberately. Left unset it defaults to `http://127.0.0.1:8000`, and an
+HTTPS page requesting HTTP localhost is blocked by the browser as mixed content —
+the fallback still engages, but only after console errors and a wasted round trip.
+An empty value goes straight to the snapshot.
+
+`dashboard/vercel.json` sets cache headers on `/snapshot/*`. Without them Vercel
+serves the capture with `max-age=0, must-revalidate`, so every page load
+re-downloads ~10 MB of tile geometry. Browsers do get brotli — the 2.6 MB
+exceedance layer transfers as 246 KB — but re-fetching it on every navigation is
+still waste.
+
+**Live deployment:** https://city-vigil.vercel.app
 
 ## Option B — also deploy the API in replay mode
 
