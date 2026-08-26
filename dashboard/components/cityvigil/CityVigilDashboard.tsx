@@ -39,6 +39,7 @@ import {
   getSurfaceGeoJSON,
   getSurfaces,
   getTractsSummary,
+  onSourceChange,
 } from '@/lib/cityvigil'
 import { AgentPanel } from './AgentPanel'
 import { PriorityPanel } from './PriorityPanel'
@@ -66,6 +67,11 @@ export function CityVigilDashboard() {
   const [exposureLoading, setExposureLoading] = useState(false)
   const [exposureError, setExposureError] = useState<string | null>(null)
   const [hoveredTract, setHoveredTract] = useState<string | null>(null)
+  const [snapshot, setSnapshot] = useState(false)
+
+  // Disclose when responses are coming from the committed capture rather than a
+  // live API. Silently serving fixed data would misrepresent the demo.
+  useEffect(() => onSourceChange(setSnapshot), [])
 
   /** Load metadata and every layer summary. */
   const loadAll = useCallback(async () => {
@@ -239,6 +245,19 @@ export function CityVigilDashboard() {
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
           {city.episode.note}
         </p>
+      )}
+
+      {snapshot && (
+        <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+          <Database className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden />
+          <p className="text-xs leading-relaxed text-slate-700">
+            <span className="font-semibold text-sky-800">Static snapshot.</span> No live
+            API is reachable, so these are the committed responses captured from the
+            FortyGuard API at default parameters — every figure is real, but changing
+            parameters needs the API running locally
+            (<code className="text-slate-600">python3 scripts/serve.py</code>).
+          </p>
+        </div>
       )}
 
       {/* Agent — placed above the map because the reasoning is the product for
