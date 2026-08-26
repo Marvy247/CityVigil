@@ -183,6 +183,98 @@ export const getExposureGeoJSON = (body: ExposureRequest) =>
     body: JSON.stringify(body),
   })
 
+/* ------------------------------------------------------------------- agent */
+
+export type TraceKind =
+  | 'decide'
+  | 'call'
+  | 'observe'
+  | 'recover'
+  | 'conclude'
+  | 'budget'
+
+export interface TraceStep {
+  step: number
+  kind: TraceKind
+  summary: string
+  rationale: string
+  tool: string | null
+  args: Record<string, unknown>
+  result: string | null
+  duration_s: number | null
+}
+
+export interface Capability {
+  name: string
+  answers: string
+  credits: number
+}
+
+export interface AgentResponse {
+  question: string
+  city: string
+  recommendation: string
+  findings: Record<string, unknown>
+  degraded: string[]
+  trace: TraceStep[]
+  tools_called: Record<string, number>
+  steps: number
+  capabilities: Capability[]
+  credits_spent: number
+  planner: string
+}
+
+export interface AgentRequest {
+  question?: string
+  city?: string
+  hour?: number
+  threshold_f?: number | null
+  max_credits?: number
+}
+
+export const runAgent = (body: AgentRequest) =>
+  request<AgentResponse>('/api/agent', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+
+/** Presentation for each trace step kind. Colour carries meaning here. */
+export const TRACE_STYLE: Record<
+  TraceKind,
+  { label: string; badge: string; rail: string }
+> = {
+  decide: {
+    label: 'Decide',
+    badge: 'bg-sky-50 text-sky-700 border-sky-200',
+    rail: 'bg-sky-500',
+  },
+  call: {
+    label: 'Call',
+    badge: 'bg-slate-100 text-slate-700 border-slate-300',
+    rail: 'bg-slate-400',
+  },
+  observe: {
+    label: 'Observe',
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    rail: 'bg-emerald-500',
+  },
+  recover: {
+    label: 'Recover',
+    badge: 'bg-amber-50 text-amber-800 border-amber-200',
+    rail: 'bg-amber-500',
+  },
+  conclude: {
+    label: 'Conclude',
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
+    rail: 'bg-violet-500',
+  },
+  budget: {
+    label: 'Budget',
+    badge: 'bg-red-50 text-red-700 border-red-200',
+    rail: 'bg-red-500',
+  },
+}
+
 /* ---------------------------------------------- vulnerability & person-hours */
 
 export interface DataSourceInfo {
