@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .agent import AgentBudget, HeatResponseAgent
 from .audit import AuditLog
 from .cities import CITIES, get_city
 from .config import Settings
@@ -571,6 +572,49 @@ def simulate_sites(req: SimulateSitesRequest) -> dict[str, Any]:
             "Placed at tract centres, not at real candidate buildings.",
             "Straight-line coverage radius, so gains are optimistic.",
         ],
+    }
+
+
+class AgentRequest(BaseModel):
+    """A goal for the agent to investigate."""
+
+    question: str = Field(
+        default="Who should we protect first, and what is the cheapest way to do it?"
+    )
+    city: str = Field(default="phoenix")
+    hour: float = Field(default=19.0)
+    threshold_f: float | None = Field(default=None)
+    max_credits: int = Field(default=40_000, ge=0)
+
+
+@app.post("/api/agent")
+def run_agent(req: AgentRequest) -> dict[str, Any]:
+    """Run the agent and return its recommendation with the full reasoning trace.
+
+    The trace is a first-class part of the response, not a debug aid: every layer
+    choice and every branch carries the reason it was taken.
+    """
+    agent = HeatResponseAgent(_client, budget=AgentBudget(max_credits=req.max_credits))
+    try:
+        result = agent.run(
+            req.question,
+            city_key=req.city,
+            evening_hour=req.hour,
+            threshold_f=req.threshold_f,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except Exception as exc:  # noqa: BLE001
+        raise _handle(exc) from exc
+
+    return {
+        **result.to_dict(),
+        "capabilities": agent.toolbox.describe(),
+        "credits_spent": agent.budget.spent_credits,
+        "planner": (
+            "Deterministic policy, not an LLM. Chosen so layer selection cannot be "
+            "hallucinated and every decision is reproducible and unit-tested."
+        ),
     }
 
 
