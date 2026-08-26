@@ -68,7 +68,7 @@ export function HeroSection() {
         </h1>
 
         <p className="hero-fade-3 text-slate-600 text-base sm:text-lg leading-relaxed max-w-xl mb-10 sm:mb-12">
-          Central Phoenix spends <span className="text-slate-700">12.4 hours a day</span>{" "}
+          Central Phoenix spends <span className="text-slate-700">13.1 hours a day</span>{" "}
           above 100&nbsp;°F. Of 110 cooling sites, 103 are open at 15:00 — and only{" "}
           <span className="text-slate-700">25 by 19:00</span>. CityVigil finds the
           people that gap leaves behind, and separates the fixes that cost money from

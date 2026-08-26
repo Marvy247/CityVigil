@@ -11,17 +11,17 @@ const layers = [
     tagStyle: "bg-sky-500/20 text-sky-400 border-sky-500/30",
     live: true,
     dim: false,
-    desc: "Per-tile min, mean and max at 100 m resolution. Central Phoenix read 35.3–36.7 °C across 10,177 tiles. Verified Celsius, despite the API docs calling it Fahrenheit.",
+    desc: "Per-tile min, mean and max at 100 m resolution. Central Phoenix read 38.8–39.3 °C across 10,177 tiles. Verified Celsius, despite the API docs calling it Fahrenheit.",
   },
   {
     num: "02",
     title: "When does it peak?",
     subtitle: "time_of_measure — hour of peak",
-    tag: "Live",
-    tagStyle: "bg-sky-500/20 text-sky-400 border-sky-500/30",
-    live: true,
-    dim: false,
-    desc: "The hour each tile peaks — what schedules cooling-centre hours. Returns 16–17 for Phoenix. The docs call it UTC; measurement says local, and getting that wrong moves every recommendation by seven hours.",
+    tag: "Not usable",
+    tagStyle: "bg-amber-50 text-amber-800 border-amber-200",
+    live: false,
+    dim: true,
+    desc: "Returned 16–17 for a 2024 window and 4–5 for 2026. Neither timezone reading reconciles those, so we do not use it for scheduling and say so rather than guessing.",
   },
   {
     num: "03",
@@ -31,7 +31,7 @@ const layers = [
     tagStyle: "bg-sky-500/20 text-sky-400 border-sky-500/30",
     live: true,
     dim: false,
-    desc: "A count of hours above 100 °F — 80.6 to 91.9 over one week. Multiply by the residents exposed and you have person-hours in the API's own units, not an invented index.",
+    desc: "A count of hours above 100 °F — 85.5 to 95.7 over one week, about 13.1 a day. Multiply by the residents exposed and you have person-hours in the API's own units, not an invented index.",
   },
   {
     num: "04",
@@ -41,7 +41,7 @@ const layers = [
     tagStyle: "bg-sky-500/20 text-sky-400 border-sky-500/30",
     live: true,
     dim: false,
-    desc: "The longest continuous dangerous stretch: 6.8–8.3 hours. Two blocks can log identical totals while one cools overnight and the other never does. Heat mortality tracks the second.",
+    desc: "The longest continuous dangerous stretch. Two blocks can log identical totals while one cools overnight and the other never does, and mortality tracks the second. Measured 6.8–8.3 h in 2024; 2026 windows return a saturated flat 8.0 h, which we report as an API characteristic.",
   },
 ]
 

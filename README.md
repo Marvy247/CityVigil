@@ -24,17 +24,28 @@ Four FortyGuard analysis layers over a 101.7 km² study area in central Phoenix,
 each selected by the *question it answers* rather than by its API name, with the
 reasoning recorded as the call is made.
 
-| Question | Layer | Real result (Phoenix, 15–21 Jul 2024, >100 °F) |
+| Question | Layer | Real result (Phoenix, 1–7 Aug 2026, >100 °F) |
 |---|---|---|
-| How hot is it? | `tcm` | 35.3 – 36.7 °C across 10,177 tiles |
-| When does it peak? | `time_of_measure` | UTC 16–17 (09:00–10:00 local MST) |
-| How long is it dangerous? | `exceedance` | 80.6 – 91.9 hours |
-| Is there any relief? | `persistence` | 6.8 – 8.3 hours unbroken |
+| How hot is it? | `tcm` | 38.8 – 39.3 °C across 10,177 tiles |
+| When does it peak? | `time_of_measure` | 4–5 — **not usable**, see below |
+| How long is it dangerous? | `exceedance` | 85.5 – 95.7 hours (13.1 per day) |
+| Is there any relief? | `persistence` | flat 8.0 h in 2026; 6.8 – 8.3 h in the 2024 window |
 
-That last pair is the point. Both are hours; they are not interchangeable. A
-block logging 91 dangerous hours that cools every night is a different emergency
-from one that never cools. Ranking on the total alone systematically
-under-protects the areas where heat actually kills.
+That last pair is the point. Both are hours; they are not interchangeable. A block
+logging 91 dangerous hours that cools every night is a different emergency from one
+that never cools, and ranking on the total alone systematically under-protects the
+areas where heat actually kills.
+
+**Two measured API caveats, reported rather than hidden:**
+
+- `persistence` returns a saturated **flat 8.0 h for every tile** across three
+  separate 2026 windows, which cannot be a real spatial field. The 2024 reference
+  window returns 6.79–8.27 h and varies sensibly, so the relief distinction is
+  demonstrated there (`phoenix-2024` in the city registry).
+- `time_of_measure` is **not usable as an hour of peak**. It returned 16–17 for the
+  2024 window and 4–5 for 2026. Neither timezone reading reconciles those: as local
+  time 4–5 is pre-dawn, as UTC it is 21:00–22:00 local. CityVigil therefore does not
+  use it for scheduling, and says so.
 
 ### Who gets protected first — from real data, not mocks
 
@@ -47,9 +58,9 @@ by vulnerability-weighted person-hours:
 | Residents covered | 202,025 (18,100 aged 65+) |
 | Jobs in outdoor-exposed sectors | 54,070 |
 | Tiles joined to a tract | 10,177 of 10,177 (0 unmatched) |
-| **Person-hours above 100 °F** | **17,576,225** |
-| Of which borne by residents aged 65+ | 1,575,638 |
-| Vulnerability-weighted person-hours | 10,518,112 |
+| **Person-hours above 100 °F** | **18,407,328** |
+| Of which borne by residents aged 65+ | 1,650,153 |
+| Vulnerability-weighted person-hours | 11,232,238 |
 
 Person-hours are not an invented index. `exceedance` returns *hours past a
 threshold*; multiplying by the residents exposed gives person-hours in the API's
@@ -78,7 +89,7 @@ so any result can be tied to the exact bytes behind it.
 
 Cooling capacity collapses exactly as the evening danger period begins.
 
-Central Phoenix averaged **12.4 hours per day above 100 °F** during the study
+Central Phoenix averaged **13.1 hours per day above 100 °F** during the study
 episode, so the dangerous window runs well into the evening. But of the 110 indoor
 cooling sites in the network:
 
@@ -95,7 +106,7 @@ they have different price tags:
 
 - **Siting.** Only **14 of 57** tracts have a walkable cooling site even at full
   capacity. Fixing that needs new or relocated sites.
-- **Hours.** **9 tracts — 33,954 residents, 2.95M person-hours** — have walkable
+- **Hours.** **9 tracts — 33,954 residents, 3.11M person-hours** — have walkable
   cooling in the afternoon and lose it by 19:00. Fixing that needs later closing
   times and no capital spend at all.
 

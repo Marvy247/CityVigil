@@ -31,7 +31,7 @@ const steps = [
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Dangerous hours</span>
-            <span className="text-slate-900 text-sm font-medium">80.6 – 91.9 per week</span>
+            <span className="text-slate-900 text-sm font-medium">85.5 – 95.7 per week</span>
           </div>
         </div>
       ),
@@ -55,11 +55,11 @@ const steps = [
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Person-hours</span>
-            <span className="text-slate-900 text-sm font-mono">17,576,225</span>
+            <span className="text-slate-900 text-sm font-mono">18,407,328</span>
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Weighted</span>
-            <span className="text-slate-900 text-sm font-mono">10,518,112</span>
+            <span className="text-slate-900 text-sm font-mono">11,232,238</span>
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Biggest promotion</span>
@@ -91,7 +91,7 @@ const steps = [
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Still above 100 °F</span>
-            <span className="text-slate-900 text-sm font-medium">12.4 hours a day</span>
+            <span className="text-slate-900 text-sm font-medium">13.1 hours a day</span>
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Residents left uncovered</span>
