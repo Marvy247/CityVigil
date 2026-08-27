@@ -27,7 +27,7 @@ const features = [
     num: "04",
     icon: ClipboardCheck,
     title: "Tested against real deaths, honestly",
-    desc: "Ranked against recorded heat mortality by ZIP: AUC 0.787, and 7 of the top 10 ZIPs did record deaths. But that barely beats heat alone at 0.771, so we report the weighting as unproven rather than claim a win.",
+    desc: "Ranked against 2023 recorded heat mortality across 92 ZIPs. Every ranking beats chance (AUC 0.68–0.82), but plain heat exposure scores highest at 0.824 against our weighted model's 0.754 — so we report the weighting as unproven rather than claim a win.",
   },
 ]
 

@@ -127,7 +127,7 @@ const steps = [
           </div>
           <div className="flex items-center justify-between py-3 border-b border-slate-200">
             <span className="text-slate-500 text-sm">Validation</span>
-            <span className="text-slate-900 text-sm font-mono">AUC 0.787 — weighting unproven</span>
+            <span className="text-slate-900 text-sm font-mono">AUC 0.754 vs 0.824 heat alone</span>
           </div>
         </div>
       ),
