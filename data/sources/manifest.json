@@ -43,6 +43,17 @@
     "sha256": "d1eb06164fe9966f54cc58412dad835f5b4b86269f909fee4814561983a82b7f",
     "url": "https://lehd.ces.census.gov/data/lodes/LODES8/az/wac/az_wac_S000_JT00_2021.csv.gz"
   },
+  "lodes8_nv_wac_2021": {
+    "bytes": 340142,
+    "citation": "US Census Bureau. LEHD Origin-Destination Employment Statistics (LODES8), Workplace Area Characteristics, Nevada, 2021.",
+    "filename": "nv_wac_S000_JT00_2021.csv.gz",
+    "licence": "US federal government work, public domain.",
+    "name": "LEHD LODES8 Workplace Area Characteristics \u2014 Nevada, 2021",
+    "recorded_at": "2026-08-27T09:37:07Z",
+    "role": "Jobs by NAICS sector at the workplace, aggregated to tract, to locate outdoor-exposed workers where they actually work during the day rather than where they sleep.",
+    "sha256": "d283651d6849e520159eee10a315f942555381999a79989f04d1d59f88441f19",
+    "url": "https://lehd.ces.census.gov/data/lodes/LODES8/nv/wac/nv_wac_S000_JT00_2021.csv.gz"
+  },
   "svi_arizona_2022": {
     "bytes": 1283179,
     "citation": "Centers for Disease Control and Prevention / Agency for Toxic Substances and Disease Registry, Geospatial Research, Analysis and Services Program. CDC/ATSDR Social Vulnerability Index 2022 Database \u2014 Arizona.",
@@ -53,6 +64,28 @@
     "role": "Tract population and the social vulnerability components: residents aged 65+, below 150% of poverty, without a vehicle, with a disability, and uninsured, plus CDC's own overall percentile ranking.",
     "sha256": "95ed8f5eb0c4e6921416caf4b2cc7f9bf3a5a28119ed0151349756cf4ff0d011",
     "url": "https://svi.cdc.gov/Documents/Data/2022/csv/states/Arizona.csv"
+  },
+  "svi_nevada_2022": {
+    "bytes": 564957,
+    "citation": "Centers for Disease Control and Prevention / Agency for Toxic Substances and Disease Registry, Geospatial Research, Analysis and Services Program. CDC/ATSDR Social Vulnerability Index 2022 Database \u2014 Nevada.",
+    "filename": "svi_nevada_2022.csv",
+    "licence": "US federal government work, public domain.",
+    "name": "CDC/ATSDR Social Vulnerability Index 2022 \u2014 Nevada, census tracts",
+    "recorded_at": "2026-08-27T09:37:07Z",
+    "role": "Tract population and the social vulnerability components: residents aged 65+, below 150% of poverty, without a vehicle, with a disability, and uninsured, plus CDC's own overall percentile ranking.",
+    "sha256": "dac7afd8f962d6dcb3ed67e4ad151dd215e8ac3fe59d2c7b573ebdf4057e98da",
+    "url": "https://svi.cdc.gov/Documents/Data/2022/csv/states/Nevada.csv"
+  },
+  "tracts_clark_2020": {
+    "bytes": 4678166,
+    "citation": "US Census Bureau, TIGERweb REST Services, Tracts_Blocks MapServer.",
+    "filename": "tracts_clark.geojson",
+    "licence": "US federal government work, public domain.",
+    "name": "Census TIGERweb census tract boundaries \u2014 Clark County",
+    "recorded_at": "2026-08-27T09:18:19Z",
+    "role": "Tract polygons used to assign each FortyGuard heat tile to a tract.",
+    "sha256": "e2999f7306116dd050528e4d3901b6a1c0a04fe3dc4bdac426e8e1775ea6950f",
+    "url": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/0/query?where=STATE%3D%2732%27+AND+COUNTY%3D%27003%27&outFields=GEOID%2CSTATE%2CCOUNTY%2CTRACT%2CNAME&returnGeometry=true&outSR=4326&f=geojson"
   },
   "tracts_maricopa_2020": {
     "bytes": 6011755,
