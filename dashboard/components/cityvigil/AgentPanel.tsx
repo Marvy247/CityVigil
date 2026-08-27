@@ -41,6 +41,14 @@ import {
 const DEFAULT_QUESTION =
   'Who should we protect first, and what is the cheapest way to do it?'
 
+/** Each of these routes to a different investigation — see agent.INTENT_PATTERNS. */
+const EXAMPLES = [
+  'How hot is it right now?',
+  'Rank the tracts by risk',
+  'What is the cheapest way to protect people?',
+  'Where should we put new sites?',
+]
+
 /**
  * The phases the agent actually moves through, in order, taken from the policy in
  * `cityvigil.agent`. They are shown progressively while a run is in flight.
@@ -264,6 +272,22 @@ export function AgentPanel({ city, hour = 19 }: AgentPanelProps) {
           Evaluated at {hour}:00 local — the hour when heat is still dangerous but much
           of the cooling network has closed.
         </p>
+
+        {/* Different goals genuinely run different investigations, so show a judge
+            what to try rather than leaving the box looking decorative. */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              onClick={() => setQuestion(ex)}
+              disabled={running}
+              className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:border-sky-400 hover:text-sky-700 disabled:opacity-50"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -347,9 +371,20 @@ export function AgentPanel({ city, hour = 19 }: AgentPanelProps) {
         <>
           {/* The answer */}
           <div className="border-b border-slate-200 bg-sky-50/60 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-800">
-              Recommendation
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-800">
+                Recommendation
+              </p>
+              {result.intent && (
+                <Badge
+                  variant="outline"
+                  className="border-sky-300 bg-white font-mono text-[10px] text-sky-700"
+                  title="How the agent interpreted the goal, which determines how far it investigated"
+                >
+                  goal read as: {result.intent}
+                </Badge>
+              )}
+            </div>
             <p className="mt-1 text-sm leading-relaxed text-slate-800">
               {result.recommendation}
             </p>

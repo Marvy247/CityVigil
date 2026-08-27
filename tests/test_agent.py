@@ -375,3 +375,104 @@ def test_every_decision_carries_a_rationale():
     result = agent.run("q")
     for step in result.trace.of_kind("decide"):
         assert step.rationale.strip(), f"step {step.step} has no rationale"
+
+
+# ------------------------------------------------------ goal interpretation
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("How hot is it right now?", "conditions"),
+        ("Is it dangerous tonight?", "conditions"),
+        ("Rank the tracts by risk", "rank_only"),
+        ("Give me a priority list", "rank_only"),
+        ("What is the cheapest way to protect people?", "hours_first"),
+        ("Can we fix this without spending money?", "hours_first"),
+        ("Where should we put new sites?", "sites_first"),
+        ("Should we build more cooling centres?", "sites_first"),
+        ("What should we do about the heat?", "full"),
+        ("", "full"),
+    ],
+)
+def test_questions_route_to_the_right_scope(question, expected):
+    from cityvigil.agent import classify_question
+
+    intent, _, rationale = classify_question(question)
+    assert intent == expected, f"{question!r} -> {intent}"
+    assert rationale.strip(), "every interpretation must carry a reason"
+
+
+def test_classification_reports_which_words_drove_it():
+    """A reader must be able to check the interpretation, not just trust it."""
+    from cityvigil.agent import classify_question
+
+    intent, matched, _ = classify_question("what is the cheapest option?")
+    assert intent == "hours_first"
+    assert "cheapest" in matched
+
+
+def test_specific_intents_beat_general_ones():
+    """'where should we build' mentions neither cost nor ranking, but if it did the
+    siting reading must still win, since it is checked first."""
+    from cityvigil.agent import classify_question
+
+    intent, _, _ = classify_question("where should we build, and what is cheapest?")
+    assert intent == "sites_first"
+
+
+def test_conditions_question_stops_before_proposing_anything():
+    """Asking how bad it is must not return an intervention plan."""
+    agent = _agent(_surface(80.0), tracts=_tracts(), sites=[])
+    called: list[str] = []
+    for name in ("rank_population", "measure_coverage", "plan_new_sites"):
+        agent.toolbox.get(name).run = lambda **_: called.append("x") or {}
+
+    result = agent.run("How hot is it right now?")
+    assert result.intent == "conditions"
+    assert called == [], "no prioritisation or planning tools may run"
+    assert "Conditions are dangerous" in result.recommendation
+    assert "cooling" not in result.recommendation.lower()
+
+
+def test_rank_only_question_stops_after_prioritising():
+    agent = _agent(_surface(80.0), tracts=_tracts(), sites=[])
+    planned: list[str] = []
+    agent.toolbox.get("measure_coverage").run = lambda **_: planned.append("cov") or {}
+
+    result = agent.run("Rank the tracts by risk")
+    assert result.intent == "rank_only"
+    assert planned == [], "coverage must not be measured for a ranking request"
+    assert "Highest priority" in result.recommendation
+
+
+def test_siting_question_costs_capacity_first():
+    agent = _agent(_surface(80.0), tracts=_tracts(), sites=[])
+    agent.toolbox.get("measure_coverage").run = lambda **_: _coverage(hours_share=0.9)
+    agent.toolbox.get("simulate_longer_hours").run = lambda **_: _sim()
+    agent.toolbox.get("plan_new_sites").run = lambda **_: [
+        {"order": 1, "target_geoid": "04013112700", "residents_gained": 7787,
+         "person_hours_gained": 653_996.0}
+    ]
+
+    result = agent.run("Where should we put new sites?")
+    assert result.intent == "sites_first"
+    # Even though hours would have sufficed (0.9 share), siting leads because asked.
+    assert "Add cooling capacity" in result.recommendation
+    assert any("goal asked about siting" in s.summary for s in result.trace.of_kind("decide"))
+
+
+def test_cheapest_question_leads_with_the_schedule_fix():
+    """Even when distance dominates, an explicit cost question gets the cheap answer."""
+    agent = _agent(_surface(80.0), tracts=_tracts(), sites=[])
+    agent.toolbox.get("measure_coverage").run = lambda **_: _coverage(hours_share=0.18)
+    agent.toolbox.get("simulate_longer_hours").run = lambda **_: _sim()
+
+    result = agent.run("What is the cheapest way to protect people?")
+    assert result.intent == "hours_first"
+    assert "Extend cooling-site hours" in result.recommendation
+
+
+def test_intent_is_reported_in_the_payload():
+    agent = _agent(_surface(0.0), tracts=_tracts(), sites=[])
+    assert agent.run("How hot is it?").to_dict()["intent"] == "conditions"

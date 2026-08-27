@@ -292,6 +292,8 @@ export interface Capability {
 export interface AgentResponse {
   question: string
   city: string
+  /** How the agent interpreted the goal; determines how far it investigated. */
+  intent: string
   recommendation: string
   findings: Record<string, unknown>
   degraded: string[]

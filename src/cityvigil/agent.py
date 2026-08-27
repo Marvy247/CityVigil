@@ -24,7 +24,7 @@ estimated credits and stops with an explicit ``budget`` trace entry.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from .audit import AuditLog
 from .cities import City, get_city
@@ -43,6 +43,73 @@ NO_EVENT_HOURS = 1.0
 #: If extending hours recovers at least this share of the uncovered person-hours,
 #: the agent treats the cheap remedy as sufficient and does not also propose sites.
 HOURS_REMEDY_SUFFICIENT = 0.5
+
+Intent = Literal["conditions", "rank_only", "hours_first", "sites_first", "full"]
+
+#: How the agent interprets a goal. Ordered: the first intent whose terms appear wins,
+#: so the more specific readings are checked before the general ones.
+#:
+#: This is **keyword matching, not language understanding**, and the agent says so in
+#: its trace. The alternative — an LLM classifier — would be non-deterministic and
+#: could route a question to a layer that cannot answer it, which is precisely the
+#: failure this project is built to avoid. Patterns are visible, testable, and can be
+#: extended without retraining anything.
+INTENT_PATTERNS: tuple[tuple[Intent, tuple[str, ...], str], ...] = (
+    (
+        "sites_first",
+        (
+            "where should", "new site", "new sites", "build", "open a site",
+            "locate", "place a", "pop-up", "popup", "more sites", "additional site",
+        ),
+        "The goal asks where capacity should go, so siting is costed first and the "
+        "schedule fix is reported as a secondary saving.",
+    ),
+    (
+        "hours_first",
+        (
+            "cheapest", "cheapest way", "free", "no cost", "without spending",
+            "hours", "opening", "closing", "staffing", "budget", "afford",
+        ),
+        "The goal asks about cost or timing, so the schedule change is costed first "
+        "because it needs staffing rather than capital.",
+    ),
+    (
+        "rank_only",
+        ("rank", "ranking", "priority list", "list the", "which tracts", "top tracts"),
+        "The goal asks for a ranking rather than a plan, so the agent stops after "
+        "prioritising and does not cost remedies.",
+    ),
+    (
+        "conditions",
+        (
+            "how hot", "how bad", "is it dangerous", "temperature", "conditions",
+            "what is the heat", "how long is it dangerous", "any relief",
+        ),
+        "The goal asks about conditions, not about protection, so the agent reports "
+        "exposure and stops rather than proposing interventions nobody asked for.",
+    ),
+)
+
+DEFAULT_INTENT_RATIONALE = (
+    "No specific intent term matched, so the agent runs the full investigation: "
+    "exposure, population, coverage, then whichever remedy the diagnosis calls for."
+)
+
+
+def classify_question(question: str) -> tuple[Intent, tuple[str, ...], str]:
+    """Interpret a goal into an investigation scope.
+
+    Returns ``(intent, matched_terms, rationale)``. Deliberately simple and
+    deliberately honest: it is substring matching over a published vocabulary, and
+    the rationale it returns says which words drove the decision so a reader can
+    check the interpretation rather than trust it.
+    """
+    text = (question or "").lower()
+    for intent, terms, rationale in INTENT_PATTERNS:
+        hits = tuple(t for t in terms if t in text)
+        if hits:
+            return intent, hits, rationale
+    return "full", (), DEFAULT_INTENT_RATIONALE
 
 
 @dataclass
@@ -67,6 +134,8 @@ class AgentResult:
     question: str
     city: str
     trace: Trace
+    #: How the goal was interpreted; determines how far the investigation runs.
+    intent: str = "full"
     findings: dict[str, Any] = field(default_factory=dict)
     recommendation: str = ""
     degraded: list[str] = field(default_factory=list)
@@ -74,6 +143,7 @@ class AgentResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "question": self.question,
+            "intent": self.intent,
             "city": self.city,
             "recommendation": self.recommendation,
             "findings": self.findings,
@@ -248,6 +318,19 @@ class HeatResponseAgent:
         threshold = threshold_f if threshold_f is not None else city.danger_threshold_f
         result = AgentResult(question=question, city=city.key, trace=trace)
 
+        intent, matched, intent_why = classify_question(question)
+        result.intent = intent
+        trace.add(
+            "decide",
+            f"interpreted the goal as '{intent}'",
+            rationale=(
+                f"{intent_why}"
+                + (f" Matched: {', '.join(matched)}." if matched else "")
+                + " Interpretation is keyword matching over a published vocabulary, "
+                "not language understanding — see INTENT_PATTERNS."
+            ),
+        )
+
         trace.add(
             "decide",
             f"goal accepted: {question}",
@@ -337,6 +420,49 @@ class HeatResponseAgent:
             rationale=f"Mean {mean_hours:.1f} h past {threshold:.0f} F over the window.",
         )
 
+        # Intent-driven stop: a question about conditions gets an answer about
+        # conditions, not an unrequested intervention plan.
+        if intent == "conditions":
+            relief = ""
+            relief_tool = self.toolbox.get("relief_hours")
+            if self.budget.can_afford(relief_tool.credits):
+                try:
+                    persistence = self.toolbox.invoke(
+                        "relief_hours", trace, city=city, threshold_f=threshold
+                    )
+                    self.budget.charge(relief_tool.credits)
+                    longest = max(persistence.values)
+                    trace.add(
+                        "call",
+                        "queried longest unbroken dangerous run",
+                        tool="relief_hours",
+                        args={"city": city.key},
+                        result=f"max {longest:.1f} h unbroken",
+                    )
+                    relief = f" Longest unbroken dangerous run: {longest:.1f} hours."
+                except ToolError:
+                    result.degraded.append("persistence layer unavailable")
+            trace.add(
+                "conclude",
+                "reported conditions only",
+                rationale=(
+                    "The goal asked how bad conditions are, so the agent answers that "
+                    "and stops. Proposing interventions would be answering a different "
+                    "question."
+                ),
+            )
+            result.findings = {
+                "mean_exceedance_h": round(mean_hours, 2),
+                "max_exceedance_h": round(max(exceedance.values), 2),
+                "event": True,
+            }
+            result.recommendation = (
+                f"Conditions are dangerous: a mean {mean_hours:.1f} hours per tile above "
+                f"{threshold:.0f} F across the window, peaking at "
+                f"{max(exceedance.values):.1f}.{relief}"
+            )
+            return result
+
         # ── 2. Add the relief signal, since totals hide overnight non-relief ─
         persistence = None
         relief_tool = self.toolbox.get("relief_hours")
@@ -423,6 +549,30 @@ class HeatResponseAgent:
             return result
 
         # ── 4. Measure coverage, then branch on the cause of the gap ────────
+        if intent == "rank_only":
+            top = report.ranked(10)
+            trace.add(
+                "conclude",
+                "reported the ranking and stopped",
+                rationale=(
+                    "The goal asked for a priority order, not a plan, so the agent "
+                    "does not spend further steps costing remedies."
+                ),
+            )
+            result.findings = {
+                "totals": report.totals(),
+                "top_tracts": [e.to_dict() for e in top],
+            }
+            lead = top[0]
+            result.recommendation = (
+                f"Highest priority: tract {lead.tract.geoid} "
+                f"({lead.tract.population:,} residents, {lead.tract.age65:,} aged 65+, "
+                f"{lead.person_hours:,.0f} person-hours). "
+                f"{len(report.tracts)} tracts ranked by vulnerability-weighted "
+                f"person-hours; full order in the findings."
+            )
+            return result
+
         trace.add(
             "decide",
             f"test whether protection exists at {evening_hour:g}:00",
@@ -480,8 +630,21 @@ class HeatResponseAgent:
             ),
         )
 
-        # The consequential branch: which remedy to cost out.
-        if coverage["hours_gap_tracts"] > 0:
+        # The consequential branch: which remedy to cost out. The diagnosis decides
+        # by default; an explicit goal ("where should we build" / "cheapest way") can
+        # reorder it, and the trace says which reason applied.
+        prefer_sites = intent == "sites_first"
+        if prefer_sites:
+            trace.add(
+                "decide",
+                "costing capacity first because the goal asked about siting",
+                rationale=(
+                    "The schedule fix is still evaluated afterwards, so the cheaper "
+                    "option is not lost — but the goal asked where to put capacity, so "
+                    "that is answered first."
+                ),
+            )
+        if coverage["hours_gap_tracts"] > 0 and not prefer_sites:
             trace.add(
                 "decide",
                 "cost the schedule fix before the capital fix",
@@ -512,15 +675,20 @@ class HeatResponseAgent:
             )
             result.findings["hours_remedy"] = best.to_dict()
 
-            if share >= HOURS_REMEDY_SUFFICIENT:
+            if share >= HOURS_REMEDY_SUFFICIENT or intent == "hours_first":
                 trace.add(
                     "conclude",
                     "schedule change is the primary recommendation",
                     rationale=(
                         f"Closing times account for {share:.0%} of uncovered "
-                        f"person-hours, so extending hours addresses most of the gap "
-                        f"without capital spend. Not proposing new sites as the lead "
-                        f"action."
+                        f"person-hours."
+                        + (
+                            " The goal asked for the cheapest option, so the schedule "
+                            "change is the answer even though distance also matters."
+                            if intent == "hours_first" and share < HOURS_REMEDY_SUFFICIENT
+                            else " Extending hours addresses most of the gap without "
+                            "capital spend, so new sites are not the lead action."
+                        )
                     ),
                 )
                 result.recommendation = (
