@@ -124,7 +124,7 @@ def test_top_k_precision_guards():
 # ------------------------------------------------------------- verdicts
 
 
-def test_verdict_reports_improvement_when_weighting_helps():
+def test_verdict_reports_improvement_only_when_intervals_separate():
     scores = [
         _score("a", weighted=100.0, heat=1.0, deaths=20),
         _score("b", weighted=90.0, heat=1.0, deaths=10),
@@ -134,11 +134,14 @@ def test_verdict_reports_improvement_when_weighting_helps():
     result = validate(scores)
     assert result.metrics["weighted_person_hours"]["auc"] == 1.0
     assert result.metrics["mean_exceedance_h"]["auc"] == 0.0
+    # Perfect separation in both directions, so the intervals cannot overlap.
     assert "weighting helps" in result.verdict
+    assert "intervals separate" in result.verdict
 
 
-def test_verdict_admits_when_weighting_hurts():
-    """The report must say so plainly rather than bury it."""
+def test_verdict_refuses_to_claim_a_difference_when_intervals_overlap():
+    """With a small sample the honest verdict is "not demonstrated" — neither a
+    claimed gain nor a claimed harm, both of which would overclaim."""
     scores = [
         _score("a", weighted=1.0, heat=100.0, deaths=20),
         _score("b", weighted=2.0, heat=90.0, deaths=10),
@@ -146,18 +149,18 @@ def test_verdict_admits_when_weighting_hurts():
         _score("d", weighted=90.0, heat=2.0, deaths=None),
     ]
     result = validate(scores)
-    assert "HURTS" in result.verdict
-    assert "not justified" in result.verdict
+    assert "not demonstrated" in result.verdict
+    assert "intervals overlap" in result.verdict
 
 
-def test_verdict_calls_a_tie_a_tie():
+def test_verdict_calls_an_indistinguishable_result_undemonstrated():
     scores = [
         _score("a", weighted=100.0, heat=100.0, deaths=20),
         _score("b", weighted=90.0, heat=90.0, deaths=10),
         _score("c", weighted=10.0, heat=10.0, deaths=None),
         _score("d", weighted=5.0, heat=5.0, deaths=None),
     ]
-    assert "no meaningful difference" in validate(scores).verdict
+    assert "not demonstrated" in validate(scores).verdict
 
 
 def test_verdict_undetermined_without_both_classes():
@@ -191,3 +194,52 @@ def test_all_four_candidate_rankings_are_scored():
         "mean_exceedance_h",
         "population",
     }
+
+
+def test_spearman_matches_known_values():
+    from cityvigil.validation import spearman
+
+    assert spearman([1, 2, 3, 4, 5], [1, 2, 3, 4, 5]) == pytest.approx(1.0)
+    assert spearman([1, 2, 3, 4, 5], [5, 4, 3, 2, 1]) == pytest.approx(-1.0)
+    assert spearman([1, 2, 3, 4, 5], [2, 1, 4, 3, 5]) == pytest.approx(0.8)
+
+
+def test_spearman_guards():
+    from cityvigil.validation import spearman
+
+    assert spearman([1, 2], [1, 2]) is None, "too few points"
+    assert spearman([1, 1, 1], [1, 2, 3]) is None, "constant series is undefined"
+    with pytest.raises(ValueError, match="same length"):
+        spearman([1, 2, 3], [1, 2])
+
+
+def test_bootstrap_ci_brackets_the_point_estimate():
+    from cityvigil.validation import auc, bootstrap_auc_ci
+
+    scores = [5.0, 4.0, 3.0, 2.0, 1.0, 0.5]
+    labels = [True, True, True, False, False, False]
+    point = auc(scores, labels)
+    ci = bootstrap_auc_ci(scores, labels, iterations=400)
+    assert ci is not None
+    assert ci[0] <= point <= ci[1]
+
+
+def test_bootstrap_ci_is_deterministic_for_a_fixed_seed():
+    from cityvigil.validation import bootstrap_auc_ci
+
+    args = ([3.0, 2.0, 1.0, 0.0], [True, True, False, False])
+    assert bootstrap_auc_ci(*args, iterations=200) == bootstrap_auc_ci(*args, iterations=200)
+
+
+def test_uncensored_release_reports_no_suppression():
+    """The 2023 release publishes real zeros, which is what gives the test power."""
+    from cityvigil.validation import outcome_summary
+
+    outcomes = {
+        "a": _zip_outcome("a", 32),
+        "b": _zip_outcome("b", 0),
+        "c": _zip_outcome("c", 7),
+    }
+    s = outcome_summary(outcomes)
+    assert s["n_suppressed"] == 0
+    assert s["min_published"] == 0, "a real zero, not a suppressed value"

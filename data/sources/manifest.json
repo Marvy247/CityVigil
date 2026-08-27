@@ -10,6 +10,17 @@
     "sha256": "10f86d48ed48ac872e8ace4333a8cf809685aa5cd6f62c1a9f1fd48b7faff971",
     "url": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/HeatdeathsbyzipcodeinMaricopaCounty2022/FeatureServer/0/query?where=1%3D1&outFields=ZipCode%2CHeatDeaths&outSR=4326&returnGeometry=true&f=geojson"
   },
+  "heat_deaths_zip_2023": {
+    "bytes": 4268130,
+    "citation": "Maricopa County Department of Public Health, 2023 heat surveillance report map. Published as the 'HeatReportMap2023' feature service.",
+    "filename": "heat_deaths_zip_2023.geojson",
+    "licence": "Published for public use by a county public health department.",
+    "name": "Heat-associated deaths by ZIP code, Maricopa County, 2023",
+    "recorded_at": "2026-08-26T14:32:22Z",
+    "role": "The primary validation outcome. Unlike the 2022 ZIP release, counts here are NOT suppressed: 139 ZIPs carry actual values totalling 565 deaths, with real zeros. That supports rank correlation and bootstrap confidence intervals rather than only a binary above-threshold test, which is what made the 2022 result statistically weak. Provenance cross-checked against the 2022 release: the same ZIPs lead both years, counts are uniformly higher in 2023 (Maricopa's record year), and the two rank-correlate at 0.495 across ZIPs published in both.",
+    "sha256": "8028b6acb62f3cd92d750eec770ddf252084ab525001585a5a7bf85b1dbdae23",
+    "url": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/ArcGIS/rest/services/HeatReportMap2023/FeatureServer/0/query?where=1%3D1&outFields=ZipCode%2CCommunityN%2CCount_&outSR=4326&returnGeometry=true&f=geojson"
+  },
   "hrn_maricopa_current": {
     "bytes": 332854,
     "citation": "Maricopa Association of Governments and Maricopa County Department of Public Health. Heat Relief Network public site layer (hrn.azmag.gov), HRN_Public_view feature service.",

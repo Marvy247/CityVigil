@@ -127,43 +127,54 @@ observation rather than missing data.
 
 ### The result
 
-July 2022 exposure across 18 AOI tiles (207,093 heat tiles, 673 tracts, 2,882,339
-residents), aggregated to 91 ZIPs of which 24 are high-mortality:
+Validated against Maricopa County's **2023** heat-death release, which publishes
+uncensored counts — 137 ZIPs, 563 deaths, real zeros. The 2022 release suppressed
+116 of 142 ZIPs, which is what made the earlier version of this test statistically
+weak. July 2023 exposure across 24 AOI tiles, aggregated to 92 ZIPs of which 33 are
+high-mortality:
 
-| Ranking by | AUC | Precision@10 |
-|---|---|---|
-| **Vulnerability-weighted person-hours** | **0.787** | **0.70** |
-| Heat exposure alone | 0.771 | 0.70 |
-| Person-hours (heat × population) | 0.724 | 0.60 |
-| Population alone | 0.708 | 0.50 |
+| Ranking by | AUC | 95% CI | Spearman vs counts | P@10 |
+|---|---|---|---|---|
+| **Heat exposure alone** | **0.824** | 0.724–0.911 | +0.561 | **0.80** |
+| Vulnerability-weighted person-hours | 0.754 | 0.640–0.859 | **+0.571** | 0.60 |
+| Person-hours (heat × population) | 0.696 | 0.574–0.806 | +0.465 | 0.60 |
+| Population alone | 0.681 | 0.557–0.794 | +0.433 | 0.50 |
 
-**The vulnerability weighting is not validated by this test.** It is nominally the
-best ranking, but its 0.016 AUC margin over plain heat exposure is well inside the
-noise for 24 positive cases. On this evidence, the honest statement is that the
-weighting does not demonstrably improve discrimination over a free baseline.
+**The vulnerability weighting is not validated, and plain heat exposure scores
+higher.** On the binary test heat alone leads by 0.070 AUC and finds 8 of the top 10
+high-mortality ZIPs against the weighted model's 6. The bootstrap intervals overlap,
+so the gap is not established either — but nothing here supports claiming the
+weighting improves targeting, and we do not claim it.
 
-Three things are worth stating alongside that:
+One nuance worth stating: against *actual death counts* rather than the binary
+label, the two are effectively tied (+0.571 weighted, +0.561 heat alone). So the
+vulnerability layer is not noise — it carries similar information to heat exposure
+rather than adding to it.
 
-- **Every ranking beats chance by a wide margin** (0.71–0.79 against 0.5), and
-  7 of the top 10 ZIPs did record ≥6 heat deaths. The system is not noise.
-- **Adding population made things worse** (0.724 vs 0.771 for heat alone). Adding
-  vulnerability on top of population recovered the loss and slightly exceeded it.
-  So the vulnerability layer is doing real work — just not enough to clear the bar.
+Three things belong next to that:
+
+- **Every ranking beats chance by a wide margin** (0.68–0.82 against 0.5). The
+  system is not guessing.
+- **Adding population alone made things worse** (0.696 vs 0.824). Weighting by
+  vulnerability recovered most of that loss but did not surpass the baseline.
 - **The outcome measure is structurally hostile to this model.** 77% of Maricopa
   heat deaths occur outdoors and are recorded by *place of injury*, so the label
-  largely encodes where it is hottest outdoors, not who is vulnerable indoors. A
+  largely encodes where it is hottest outdoors — not who is vulnerable indoors. A
   residence-based vulnerability index is being graded on a test it cannot win.
 
-The right next test is the county's **indoor** death subset (23% of deaths), which
-is where a residence-based vulnerability model should predict and where heat alone
-should not. That was not available at ZIP level in the sources reached here.
+The discriminating test is the county's **indoor** death subset (23% of deaths),
+where residence-based vulnerability should predict and heat alone should not. It is
+not published at ZIP level in the sources we reached.
 
 ### Other limits, printed with every result
 
-- 24 positive ZIPs is a thin sample; AUC differences of a few points are noise.
+- 33 high-mortality ZIPs of 92 is a modest sample; bootstrap intervals are reported
+  for every candidate so small AUC gaps are not over-read.
 - Tracts are assigned to ZIPs by centre containment, which is approximate.
 - Exposure uses July only, because the API caps ranges at 31 days, while deaths
   accrue across the whole May–September season.
+- The study region covers 60% of recorded deaths. Extending to 80% would need 72 AOI
+  tiles over mostly empty desert for little added signal.
 - One year, one county. Nothing here shows the ranking transfers.
 
 ## Quick start

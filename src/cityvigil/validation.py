@@ -36,8 +36,9 @@ Known limitations of this validation
   Maricopa heat deaths occur outdoors, so a ZIP's count reflects where people were
   exposed, which is not the same as where the vulnerable population lives. This
   systematically favours ZIPs with public space and disadvantages residential ones.
-* **Small numbers.** 24 positive ZIPs is a thin sample; a difference in AUC of a
-  few points is not meaningful.
+* **Modest numbers.** 33 high-mortality ZIPs of 92 scored. Bootstrap confidence
+  intervals are reported for every candidate so a few points of AUC are not
+  mistaken for a real difference.
 * **ZIP boundaries are not tract boundaries.** Tract scores are aggregated to ZIPs
   by containment of the tract centre, which is approximate.
 * **One year, one county.** Nothing here establishes that the ranking transfers.
@@ -46,19 +47,95 @@ Known limitations of this validation
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
 from .errors import CityVigilError
 from .geometry import GridIndex, MultiPolygon, from_geojson_geometry
-from .sources import DEFAULT_DATA_DIR, HEAT_DEATHS_BY_ZIP_2022, fetch
+from .sources import (
+    DEFAULT_DATA_DIR,
+    HEAT_DEATHS_BY_ZIP_2022,
+    HEAT_DEATHS_BY_ZIP_2023,
+    fetch,
+)
 
-#: The county's suppression sentinel. Same value CDC uses, different dataset.
+#: The county's suppression sentinel, used in the 2022 ZIP release.
 SUPPRESSED = -999
 
-#: Smallest published count, and therefore the implied disclosure threshold.
+#: Smallest published count in the 2022 release, and therefore the implied
+#: disclosure threshold for that year.
 DISCLOSURE_THRESHOLD = 6
+
+
+def spearman(xs: Sequence[float], ys: Sequence[float]) -> float | None:
+    """Spearman rank correlation, with average ranks for ties.
+
+    Implemented directly rather than pulling in scipy: it is twenty lines, and the
+    dependency budget is spent where it buys more. Returns ``None`` when either
+    series is constant, since the correlation is undefined then.
+    """
+    if len(xs) != len(ys):
+        raise ValueError("series must be the same length")
+    n = len(xs)
+    if n < 3:
+        return None
+
+    def ranks(values: Sequence[float]) -> list[float]:
+        order = sorted(range(n), key=lambda i: values[i])
+        out = [0.0] * n
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and values[order[j + 1]] == values[order[i]]:
+                j += 1
+            average = (i + j) / 2.0
+            for k in range(i, j + 1):
+                out[order[k]] = average
+            i = j + 1
+        return out
+
+    rx, ry = ranks(xs), ranks(ys)
+    mx, my = sum(rx) / n, sum(ry) / n
+    num = sum((rx[i] - mx) * (ry[i] - my) for i in range(n))
+    dx = sum((rx[i] - mx) ** 2 for i in range(n))
+    dy = sum((ry[i] - my) ** 2 for i in range(n))
+    if dx == 0 or dy == 0:
+        return None
+    return num / (dx * dy) ** 0.5
+
+
+def bootstrap_auc_ci(
+    scores: Sequence[float],
+    labels: Sequence[bool],
+    *,
+    iterations: int = 2000,
+    confidence: float = 0.95,
+    seed: int = 12345,
+) -> tuple[float, float] | None:
+    """Percentile bootstrap confidence interval for AUC.
+
+    The 2022 result reported a bare point estimate with a verbal caveat that the
+    sample was small. An interval says the same thing quantitatively, and is what
+    turns "the weighting might not help" into a defensible claim either way.
+    """
+    if not scores:
+        return None
+    rng = random.Random(seed)
+    n = len(scores)
+    draws: list[float] = []
+    for _ in range(iterations):
+        idx = [rng.randrange(n) for _ in range(n)]
+        value = auc([scores[i] for i in idx], [labels[i] for i in idx])
+        if value is not None:
+            draws.append(value)
+    if len(draws) < iterations // 4:
+        return None
+    draws.sort()
+    lo = draws[int((1 - confidence) / 2 * len(draws))]
+    hi = draws[int((1 + confidence) / 2 * len(draws)) - 1]
+    return (lo, hi)
 
 
 class ValidationError_(CityVigilError):
@@ -88,18 +165,36 @@ class ZipOutcome:
         return self.deaths is not None and self.deaths >= DISCLOSURE_THRESHOLD
 
 
+#: Which release to validate against. 2023 is the default: its counts are
+#: uncensored, so it supports rank correlation and confidence intervals rather
+#: than only a binary above-threshold test.
+RELEASES = {
+    2022: (HEAT_DEATHS_BY_ZIP_2022, "HeatDeaths"),
+    2023: (HEAT_DEATHS_BY_ZIP_2023, "Count_"),
+}
+
+
 def load_zip_outcomes(
-    *, data_dir: Path = DEFAULT_DATA_DIR, download: bool = True
+    *, data_dir: Path = DEFAULT_DATA_DIR, download: bool = True, year: int = 2023
 ) -> dict[str, ZipOutcome]:
-    """Load heat deaths by ZIP, mapping the suppression sentinel to ``None``."""
-    path = HEAT_DEATHS_BY_ZIP_2022.path(data_dir)
+    """Load heat deaths by ZIP for one release year.
+
+    The 2022 release suppresses counts below the disclosure threshold with -999;
+    the 2023 release publishes actual counts including zeros. Both are handled, and
+    ``ZipOutcome.suppressed`` distinguishes them per record.
+    """
+    if year not in RELEASES:
+        raise ValidationError_(f"no outcome release for {year}; have {sorted(RELEASES)}")
+    source, field = RELEASES[year]
+
+    path = source.path(data_dir)
     if not path.is_file():
         if not download:
             raise ValidationError_(
-                f"{HEAT_DEATHS_BY_ZIP_2022.key} is not present at {path}. "
+                f"{source.key} is not present at {path}. "
                 f"Run: python3 scripts/fetch_data.py"
             )
-        path = fetch(HEAT_DEATHS_BY_ZIP_2022, data_dir=data_dir)
+        path = fetch(source, data_dir=data_dir)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     features = payload.get("features") or []
@@ -117,7 +212,7 @@ def load_zip_outcomes(
         except ValueError:
             continue
 
-        raw = props.get("HeatDeaths")
+        raw = props.get(field)
         deaths: int | None
         try:
             value = int(raw)  # type: ignore[arg-type]
@@ -130,6 +225,48 @@ def load_zip_outcomes(
     if not out:
         raise ValidationError_(f"{path} yielded no usable ZIP outcomes")
     return out
+
+
+def study_region(
+    outcomes: dict[str, ZipOutcome],
+    *,
+    coverage: float = 0.8,
+) -> tuple[tuple[float, float, float, float], list[str]]:
+    """Choose a study region that captures most of the outcome without covering desert.
+
+    Taking the bounding box of every ZIP with a published count works for a censored
+    release, where only two dozen urban ZIPs are published. It fails badly for an
+    uncensored one: all 137 Maricopa ZIPs carry a value, including the empty fringe,
+    so the box becomes the whole 36,433 km² county — 330 heatmap tiles and 1.39
+    million credits for a question that lives in the urban core. That was measured,
+    not hypothesised; a run was aborted after it started down that path.
+
+    Instead, ZIPs are taken in descending order of recorded deaths until ``coverage``
+    of all recorded deaths is accounted for, and the region is the box around those.
+    Validation then runs on every ZIP whose centre falls inside, so the sample still
+    contains both high- and low-outcome ZIPs rather than only the worst.
+
+    Returns ``(bbox, zip_codes_defining_it)``.
+    """
+    from .geometry import bbox_union
+
+    counted = [o for o in outcomes.values() if o.deaths]
+    if not counted:
+        raise ValidationError_("no ZIP carries a nonzero death count")
+
+    ordered = sorted(counted, key=lambda o: -(o.deaths or 0))
+    total = sum(o.deaths or 0 for o in ordered)
+    target = total * coverage
+
+    chosen: list[ZipOutcome] = []
+    running = 0
+    for outcome in ordered:
+        chosen.append(outcome)
+        running += outcome.deaths or 0
+        if running >= target:
+            break
+
+    return bbox_union(o.geometry.bbox for o in chosen), [o.zip_code for o in chosen]
 
 
 def outcome_summary(outcomes: dict[str, ZipOutcome]) -> dict:
@@ -289,28 +426,43 @@ class ValidationResult:
 
     @property
     def verdict(self) -> str:
-        """A plain reading of whether the vulnerability weighting earned its place."""
-        weighted = self.metrics.get("weighted_person_hours", {}).get("auc")
-        heat_only = self.metrics.get("mean_exceedance_h", {}).get("auc")
-        if weighted is None or heat_only is None:
+        """A plain reading of whether the vulnerability weighting earned its place.
+
+        Uses the bootstrap intervals rather than comparing point estimates, because
+        two AUCs a few points apart on a small sample say nothing.
+        """
+        weighted = self.metrics.get("weighted_person_hours", {})
+        heat_only = self.metrics.get("mean_exceedance_h", {})
+        w, h = weighted.get("auc"), heat_only.get("auc")
+        if w is None or h is None:
             return "undetermined: one class is absent, so AUC is undefined"
 
-        delta = weighted - heat_only
-        if abs(delta) < 0.02:
+        w_lo, h_hi = weighted.get("auc_ci_low"), heat_only.get("auc_ci_high")
+        w_rho, h_rho = weighted.get("spearman_vs_counts"), heat_only.get("spearman_vs_counts")
+        rho_note = (
+            f" Against actual death counts, rank correlation is {w_rho:+.3f} weighted "
+            f"versus {h_rho:+.3f} for heat alone."
+            if w_rho is not None and h_rho is not None
+            else ""
+        )
+
+        # Separated intervals are the only basis for claiming a real difference.
+        if w_lo is not None and h_hi is not None and w_lo > h_hi:
             return (
-                f"no meaningful difference (AUC {weighted:.3f} weighted vs "
-                f"{heat_only:.3f} heat alone). On this evidence the vulnerability "
-                f"weighting does not improve discrimination."
+                f"vulnerability weighting helps, and the intervals separate: AUC "
+                f"{w:.3f} (95% CI {w_lo:.3f}-{weighted['auc_ci_high']:.3f}) versus "
+                f"{h:.3f} (CI {h_hi:.3f} upper) for heat alone.{rho_note}"
             )
-        if delta > 0:
-            return (
-                f"vulnerability weighting helps: AUC {weighted:.3f} vs "
-                f"{heat_only:.3f} for heat alone, a gain of {delta:+.3f}."
-            )
+
+        delta = w - h
+        direction = "above" if delta > 0 else "below"
         return (
-            f"vulnerability weighting HURTS: AUC {weighted:.3f} vs {heat_only:.3f} "
-            f"for heat alone, a change of {delta:+.3f}. The weighting is not "
-            f"justified by this outcome data."
+            f"not demonstrated: AUC {w:.3f} weighted versus {h:.3f} heat alone, "
+            f"{abs(delta):.3f} {direction}, but the bootstrap intervals overlap "
+            f"(weighted {weighted.get('auc_ci_low')}-{weighted.get('auc_ci_high')}, "
+            f"heat {heat_only.get('auc_ci_low')}-{heat_only.get('auc_ci_high')}). "
+            f"On this evidence the weighting cannot be claimed to improve "
+            f"discrimination over a free baseline.{rho_note}"
         )
 
     def to_dict(self) -> dict:
@@ -322,7 +474,8 @@ class ValidationResult:
             "limitations": [
                 "Deaths are recorded by place of injury, not residence; most "
                 "Maricopa heat deaths occur outdoors.",
-                "24 positive ZIPs is a small sample; small AUC differences are noise.",
+                "33 high-mortality ZIPs of 92 is still a modest sample; the bootstrap "
+                "intervals are reported precisely so differences are not over-read.",
                 "Tracts are assigned to ZIPs by centre containment, which is approximate.",
                 "One year, one county. Nothing here shows the ranking transfers.",
             ],
@@ -331,8 +484,20 @@ class ValidationResult:
 
 
 def validate(scores: list[ZipScore], *, top_k: int = 10) -> ValidationResult:
-    """Score every candidate ranking against recorded mortality."""
+    """Score every candidate ranking against recorded mortality.
+
+    Reports three things per candidate:
+
+    * **AUC** with a bootstrap confidence interval — discrimination, and how
+      certain that estimate is. The interval is what the 2022 result lacked.
+    * **Spearman correlation against actual death counts** — only meaningful for an
+      uncensored release, and a stronger test than a binary threshold because it
+      uses the magnitude of every observation rather than collapsing to yes/no.
+    * **Precision at k** — the operationally useful question: of the k
+      neighbourhoods a city could actually act on, how many mattered.
+    """
     labels = [s.high_mortality for s in scores]
+    counts = [float(s.deaths) if s.deaths is not None else None for s in scores]
     candidates = {
         "weighted_person_hours": [s.weighted_person_hours for s in scores],
         "person_hours": [s.person_hours for s in scores],
@@ -340,10 +505,23 @@ def validate(scores: list[ZipScore], *, top_k: int = 10) -> ValidationResult:
         "population": [float(s.population) for s in scores],
     }
 
+    # Rank correlation needs actual counts, so it is computed on the subset with them.
+    with_counts = [i for i, c in enumerate(counts) if c is not None]
+
     metrics: dict[str, dict[str, float | None]] = {}
     for name, values in candidates.items():
+        ci = bootstrap_auc_ci(values, labels)
+        rho = (
+            spearman([values[i] for i in with_counts], [counts[i] for i in with_counts])
+            if len(with_counts) >= 3
+            else None
+        )
         metrics[name] = {
             "auc": auc(values, labels),
+            "auc_ci_low": None if ci is None else round(ci[0], 4),
+            "auc_ci_high": None if ci is None else round(ci[1], 4),
+            "spearman_vs_counts": None if rho is None else round(rho, 4),
+            "n_with_counts": len(with_counts),
             f"precision_at_{top_k}": top_k_precision(values, labels, top_k),
         }
 

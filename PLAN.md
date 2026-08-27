@@ -129,32 +129,35 @@ compliance is an explicit tunable, never hidden.
 2021→present, evaluated honestly against persistence and climatology baselines.
 Clearly labelled as CityVigil's model, not FortyGuard's.
 
-**Phase 6 — Validation. DONE, with a negative result.** CityVigil's ranking was
-tested against Maricopa County's recorded heat-associated deaths by ZIP (2022),
-using July 2022 exposure over 18 AOI tiles: 207,093 heat tiles, 673 tracts,
-2,882,339 residents, 91 ZIPs, 24 of them high-mortality.
+**Phase 6 — Validation. DONE, with a negative result.** Tested against Maricopa
+County's uncensored 2023 heat-death release (137 ZIPs, 563 deaths, real zeros) using
+July 2023 exposure over 24 AOI tiles, aggregated to 92 ZIPs with 33 high-mortality.
 
-| Ranking | AUC | P@10 |
-|---|---|---|
-| Vulnerability-weighted | 0.787 | 0.70 |
-| Heat alone | 0.771 | 0.70 |
-| Heat × population | 0.724 | 0.60 |
-| Population alone | 0.708 | 0.50 |
+| Ranking | AUC | 95% CI | rho vs counts | P@10 |
+|---|---|---|---|---|
+| Heat alone | **0.824** | 0.724-0.911 | +0.561 | 0.80 |
+| Vulnerability-weighted | 0.754 | 0.640-0.859 | +0.571 | 0.60 |
+| Heat x population | 0.696 | 0.574-0.806 | +0.465 | 0.60 |
+| Population alone | 0.681 | 0.557-0.794 | +0.433 | 0.50 |
 
-**The vulnerability weighting did not clear the baseline.** A +0.016 AUC margin
-over plain heat exposure is noise at n=24. Every ranking beats chance comfortably
-and 7 of the top 10 ZIPs did record ≥6 deaths, so the system is not noise — but the
-specific claim that weighting by vulnerability improves targeting is unproven.
+**The weighting did not clear the baseline; heat alone scored higher.** Intervals
+overlap so neither direction is established, but the claim that weighting improves
+targeting is unsupported and is not made. On actual counts the two are effectively
+tied (+0.571 vs +0.561), so the vulnerability layer carries similar information to
+heat rather than adding to it.
+
+Method upgrades over the first attempt: uncensored counts instead of a binary
+above-threshold test, Spearman correlation against real magnitudes, and bootstrap
+confidence intervals so differences are not over-read.
 
 Diagnosis rather than excuse: 77% of Maricopa heat deaths occur outdoors and are
 recorded by place of injury, so the label mostly encodes where it is hottest
-outdoors. A residence-based vulnerability index cannot win that test. The
-discriminating experiment is the county's **indoor** death subset, which was not
-available at ZIP level from the services reached.
+outdoors. The discriminating experiment is the indoor subset, unavailable at ZIP
+level.
 
-Do not claim validated targeting improvement in the submission. Claim a
-substantially better-than-chance ranking, a real and quantified cooling-hours gap,
-and an honest null on the weighting.
+Do not claim validated targeting improvement. Claim a substantially
+better-than-chance ranking, a real and quantified cooling-hours gap, and an honest
+null on the weighting.
 
 **Phase 7 — Agent loop.** Genuine decision points: which layer answers this
 question, whether to zoom, what to do when a task returns empty, when to

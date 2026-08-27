@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -27,6 +28,7 @@ from cityvigil.layers import ExposureLayers, HeatSurface, Tile  # noqa: E402
 from cityvigil.tracts import load_tracts  # noqa: E402
 from cityvigil.validation import (  # noqa: E402
     aggregate_to_zips,
+    study_region,
     load_zip_outcomes,
     outcome_summary,
     validate,
@@ -39,8 +41,15 @@ RULE = "=" * 78
 # July 2022: the peak heat month, and within the API's measured 31-day range limit.
 # Deaths accrue across the whole May-September season, so this is exposure during
 # the worst month rather than the whole season — a stated simplification.
-WINDOW_START, WINDOW_END = "2022-07-01", "2022-07-31"
+WINDOW_START, WINDOW_END = "2023-07-01", "2023-07-31"
 THRESHOLD_F = 100.0
+
+#: 2023 is used because its counts are uncensored, unlike the 2022 release.
+OUTCOME_YEAR = 2023
+
+#: Share of recorded deaths the study region must cover. 0.6 gives 24 AOI tiles
+#: over the urban core; 0.8 would give 72 and add mostly empty land.
+REGION_COVERAGE = 0.6
 
 
 def main() -> int:
@@ -53,11 +62,11 @@ def main() -> int:
     print(RULE)
     print(f"exposure window : {WINDOW_START} to {WINDOW_END} (peak heat month)")
     print(f"threshold       : {THRESHOLD_F:.0f} F")
-    print(f"outcome         : Maricopa County heat-associated deaths by ZIP, 2022")
+    print(f"outcome         : Maricopa County heat deaths by ZIP, {OUTCOME_YEAR} (uncensored)")
     print(f"cache mode      : {settings.cache_mode}")
     print()
 
-    outcomes = load_zip_outcomes(download=True)
+    outcomes = load_zip_outcomes(download=True, year=OUTCOME_YEAR)
     summary = outcome_summary(outcomes)
     print(RULE)
     print("OUTCOME DATA")
@@ -71,8 +80,11 @@ def main() -> int:
     print(f"\n  {summary['censoring_note']}")
 
     # --- study region: the extent of ZIPs with published counts --------------
-    published = [o for o in outcomes.values() if not o.suppressed]
-    region = bbox_union(o.geometry.bbox for o in published)
+    # Region is chosen to cover most of the recorded mortality without paying for
+    # empty desert. With an uncensored release, every ZIP in the county carries a
+    # value, so the bbox of "all published" is the whole 36,433 km2 county: 330
+    # tiles and 1.39M credits. See validation.study_region.
+    region, defining = study_region(outcomes, coverage=REGION_COVERAGE)
     tiles = tile_bbox(region)
 
     # `--tiles N` runs a subset, for checking the pipeline before committing to the
@@ -90,6 +102,7 @@ def main() -> int:
     print(f"area           : {bbox_area_km2(region):,.0f} km²")
     print(f"AOI tiles      : {len(tiles)} (heatmaps cost a flat 4,220 credits each)")
     print(f"credits if live: {len(tiles) * 4220:,}")
+    print(f"region covers  : {REGION_COVERAGE:.0%} of recorded deaths, from {len(defining)} ZIPs")
     if limit is not None:
         print(f"  SUBSET RUN: limited to {limit} tiles — results are not representative")
 
@@ -98,18 +111,39 @@ def main() -> int:
         print(f"credits now    : {before:,}")
 
     # --- fetch exposure across the region -----------------------------------
-    print(f"\nFetching July 2022 exceedance for {len(tiles)} tiles…")
+    print(f"\nFetching July {OUTCOME_YEAR} exceedance for {len(tiles)} tiles…")
     all_tiles: list[Tile] = []
     offset = 0
+    skipped: list[int] = []
+
     for n, aoi in enumerate(tiles, start=1):
-        surface = layers.how_long_dangerous(
-            aoi,
-            threshold=THRESHOLD_F,
-            threshold_unit="F",
-            start_date=WINDOW_START,
-            end_date=WINDOW_END,
-            granularity=100,
-        )
+        # A transient 500 killed an earlier 24-tile run on its first tile: the
+        # client's three fast retries all landed inside the same server hiccup.
+        # Retry here with much longer gaps, and skip a tile that stays broken rather
+        # than discarding the whole run. Failed tasks cost no credits.
+        surface = None
+        for attempt, pause in enumerate((0, 45, 120), start=1):
+            if pause:
+                print(f"      retrying tile {n} in {pause}s (attempt {attempt})")
+                time.sleep(pause)
+            try:
+                surface = layers.how_long_dangerous(
+                    aoi,
+                    threshold=THRESHOLD_F,
+                    threshold_unit="F",
+                    start_date=WINDOW_START,
+                    end_date=WINDOW_END,
+                    granularity=100,
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - transient upstream failure
+                print(f"      tile {n} attempt {attempt} failed: {type(exc).__name__}")
+
+        if surface is None:
+            skipped.append(n)
+            print(f"  [{n}/{len(tiles)}] SKIPPED after 3 attempts")
+            continue
+
         # Tile ids restart per AOI, so re-key them to keep the combined set unique.
         for tile in surface.tiles:
             all_tiles.append(
@@ -120,8 +154,17 @@ def main() -> int:
                 )
             )
         offset += len(surface.tiles) + 1
-        print(f"  [{n}/{len(tiles)}] {len(surface.tiles):>6,} tiles  "
-              f"mean {sum(t.value for t in surface.tiles) / len(surface.tiles):>6.1f} h")
+        print(
+            f"  [{n}/{len(tiles)}] {len(surface.tiles):>6,} tiles  "
+            f"mean {sum(t.value for t in surface.tiles) / len(surface.tiles):>6.1f} h"
+        )
+
+    if skipped:
+        print(f"\n  WARNING: {len(skipped)} of {len(tiles)} tiles unavailable: {skipped}")
+        print("  Those areas are absent from the analysis and the ZIP coverage below.")
+    if not all_tiles:
+        print("\nNo tiles retrieved; cannot validate.")
+        return 1
 
     combined = HeatSurface(
         analytic_type="exceedance",
@@ -157,8 +200,8 @@ def main() -> int:
     print(f"ZIPs scored          : {result.n_zips}")
     print(f"high-mortality ZIPs  : {result.n_high_mortality}")
     print()
-    print(f"{'ranking by':<26}{'AUC':>8}{'precision@10':>15}")
-    print("-" * 49)
+    print(f"{'ranking by':<26}{'AUC':>8}{'95% CI':>18}{'rho vs counts':>15}{'P@10':>7}")
+    print("-" * 74)
     labels = {
         "weighted_person_hours": "vulnerability-weighted",
         "person_hours": "person-hours (heat×pop)",
@@ -167,11 +210,14 @@ def main() -> int:
     }
     for key, label in labels.items():
         m = result.metrics[key]
-        a = m["auc"]
-        p = m["precision_at_10"]
+        a, p = m["auc"], m["precision_at_10"]
+        lo, hi = m.get("auc_ci_low"), m.get("auc_ci_high")
+        rho = m.get("spearman_vs_counts")
+        ci = f"{lo:.3f}-{hi:.3f}" if lo is not None and hi is not None else "n/a"
         print(
-            f"{label:<26}{(f'{a:.3f}' if a is not None else 'n/a'):>8}"
-            f"{(f'{p:.2f}' if p is not None else 'n/a'):>15}"
+            f"{label:<26}{(f'{a:.3f}' if a is not None else 'n/a'):>8}{ci:>18}"
+            f"{(f'{rho:+.3f}' if rho is not None else 'n/a'):>15}"
+            f"{(f'{p:.2f}' if p is not None else 'n/a'):>7}"
         )
 
     print()

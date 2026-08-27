@@ -190,6 +190,44 @@ HEAT_DEATHS_BY_ZIP_2022 = DataSource(
     ),
 )
 
+def _heat_deaths_2023_url() -> str:
+    """Build the query returning 2023 heat deaths by ZIP as GeoJSON."""
+    base = (
+        "https://services.arcgis.com/ykpntM6e3tHvzKRJ/ArcGIS/rest/services/"
+        "HeatReportMap2023/FeatureServer/0/query"
+    )
+    params = {
+        "where": "1=1",
+        "outFields": "ZipCode,CommunityN,Count_",
+        "outSR": "4326",
+        "returnGeometry": "true",
+        "f": "geojson",
+    }
+    return f"{base}?{urllib.parse.urlencode(params)}"
+
+
+HEAT_DEATHS_BY_ZIP_2023 = DataSource(
+    key="heat_deaths_zip_2023",
+    name="Heat-associated deaths by ZIP code, Maricopa County, 2023",
+    url=_heat_deaths_2023_url(),
+    filename="heat_deaths_zip_2023.geojson",
+    citation=(
+        "Maricopa County Department of Public Health, 2023 heat surveillance report "
+        "map. Published as the 'HeatReportMap2023' feature service."
+    ),
+    licence="Published for public use by a county public health department.",
+    role=(
+        "The primary validation outcome. Unlike the 2022 ZIP release, counts here are "
+        "NOT suppressed: 139 ZIPs carry actual values totalling 565 deaths, with real "
+        "zeros. That supports rank correlation and bootstrap confidence intervals "
+        "rather than only a binary above-threshold test, which is what made the 2022 "
+        "result statistically weak. Provenance cross-checked against the 2022 release: "
+        "the same ZIPs lead both years, counts are uniformly higher in 2023 (Maricopa's "
+        "record year), and the two rank-correlate at 0.495 across ZIPs published in "
+        "both."
+    ),
+)
+
 SOURCES: dict[str, DataSource] = {
     s.key: s
     for s in (
@@ -198,6 +236,7 @@ SOURCES: dict[str, DataSource] = {
         LODES_ARIZONA_WAC,
         HEAT_RELIEF_NETWORK,
         HEAT_DEATHS_BY_ZIP_2022,
+        HEAT_DEATHS_BY_ZIP_2023,
     )
 }
 
