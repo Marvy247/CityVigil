@@ -1,6 +1,6 @@
 # CityVigil
 
-**Live demo: https://city-vigil.vercel.app** — runs from a committed snapshot of
+**Live demo: https://city-vigil.vercel.app** · **[Project summary](SUMMARY.md)** · **[API usage](API_USAGE.md)** — runs from a committed snapshot of
 real FortyGuard responses, so it needs no API key and no backend.
 
 Protective intelligence for extreme heat. Decides who gets protected first when
