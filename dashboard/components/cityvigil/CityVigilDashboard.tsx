@@ -43,6 +43,7 @@ import {
 } from '@/lib/cityvigil'
 import { AgentPanel } from './AgentPanel'
 import { PriorityPanel } from './PriorityPanel'
+import { SupplyChart } from './SupplyChart'
 
 const ALL_LAYERS: LayerKey[] = ['snapshot', 'peak_hour', 'exceedance', 'persistence']
 
@@ -301,6 +302,9 @@ export function CityVigilDashboard() {
       {error && summary && (
         <p className="text-xs text-amber-600">Last action failed: {error}</p>
       )}
+
+      {/* Cooling supply gap */}
+      <SupplyChart />
 
       {/* Who gets protected first */}
       {exposureError ? (

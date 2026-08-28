@@ -238,6 +238,18 @@ export const getAudit = () => request<AuditResponse>('/api/audit')
 export const getSources = () => request<SourcesResponse>('/api/sources')
 export const getTractsSummary = () => request<TractsSummary>('/api/tracts/summary')
 
+export interface SupplyResponse {
+  open_by_hour: Record<string, number>
+  peak_hour: number
+  peak_open: number
+  summary: {
+    n_cooling_sites: number
+    median_weekday_closing_hour: number
+  }
+}
+
+export const getSupply = () => request<SupplyResponse>('/api/supply')
+
 export const getSurfaces = (body: SurfaceRequest) =>
   request<SurfacesResponse>('/api/surfaces', {
     method: 'POST',
