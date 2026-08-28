@@ -9,7 +9,7 @@
  * hides the modelling choice inside the headline.
  */
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { ArrowDown, ArrowUp, Minus, Users } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
