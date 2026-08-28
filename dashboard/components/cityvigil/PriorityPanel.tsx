@@ -179,9 +179,8 @@ export function PriorityPanel({
                   const shift = shiftByGeoid.get(t.geoid)
                   const isOpen = expanded === t.geoid
                   return (
-                    <>
+                    <React.Fragment key={t.geoid}>
                       <TableRow
-                        key={t.geoid}
                         onMouseEnter={() => onHoverTract?.(t.geoid)}
                         onMouseLeave={() => onHoverTract?.(null)}
                         onClick={() => setExpanded(isOpen ? null : t.geoid)}
@@ -266,7 +265,7 @@ export function PriorityPanel({
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   )
                 })}
               </TableBody>
