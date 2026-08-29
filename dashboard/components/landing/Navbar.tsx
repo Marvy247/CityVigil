@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Shield, X, Menu } from "lucide-react"
+import { X, Menu } from "lucide-react"
+import { CityVigilLogo } from "@/components/cityvigil/CityVigilLogo"
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -31,9 +32,7 @@ export function Navbar() {
         style={{ transitionProperty: "background-color, border-color, opacity, transform" }}
       >
         <Link href="/" className="flex items-center gap-2.5 shrink-0 group" onClick={closeMenu}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
-            <Shield className="w-5 h-5 text-slate-900" />
-          </div>
+          <CityVigilLogo size={32} />
           <span className="font-semibold text-slate-900 text-lg leading-none">CityVigil</span>
         </Link>
 
